@@ -80,10 +80,11 @@ if product_file and image_file:
                     for step_index, item in enumerate(meal_sequence.get('items', [])):
                         bundle_group = create_base_row()
                         bundle_group['Name'] = 'Choose your option'
-                        bundle_group['Name_en'] = 'Choose your option'
-                        bundle_group['Name_es'] = 'Choose your option'
-                        bundle_group['Name_fr'] = 'Choose your option'
+                        bundle_group['Name_en'] = ''  # Blank for bundles
+                        bundle_group['Name_es'] = ''  # Blank for bundles
+                        bundle_group['Name_fr'] = ''  # Blank for bundles
                         bundle_group['PLU'] = f"{meal_sequence['id']}-{step_index}"
+                        bundle_group['Multiple'] = 1  # Always 1 for bundles
                         
                         choices = item.get('choices', [])
                         subproduct_ids = [str(choice.get('reference_id', '')) for choice in choices if choice.get('reference_id')]
@@ -95,6 +96,7 @@ if product_file and image_file:
                         bundle_group['Min'] = 1
                         bundle_group['Producttype'] = 'BUNDLE'
                         bundle_group['isCombo'] = ''
+                        bundle_group['Isinternal'] = ''  # Blank for bundles
                         bundle_groups.append(bundle_group)
                 
                 output_data.extend(bundle_groups)
@@ -135,7 +137,8 @@ if product_file and image_file:
                     row['ProductTags'] = ','.join(product_ref.get('allergens', [])) if product_ref else ''
                     row['Producttype'] = 'PRODUCT'
                     row['isCombo'] = 'TRUE'
-                    row['Imageurl'] = get_image_url(row['ProductImageID'], image_export_data)
+                    row['Isinternal'] = 'TRUE'  # Set to TRUE when isCombo is TRUE
+                    row['Imageurl'] = get_image_url(row.get('ProductImageID', ''), image_export_data)
                     row['Category'] = ''
                     output_data.append(row)
                 
@@ -171,7 +174,8 @@ if product_file and image_file:
                     row['ProductTags'] = ','.join(product.get('allergens', []))
                     row['Producttype'] = 'PRODUCT'
                     row['isCombo'] = 'FALSE'
-                    row['Imageurl'] = get_image_url(row['ProductImageID'], image_export_data)
+                    row['Isinternal'] = 'FALSE'  # FALSE for regular products
+                    row['Imageurl'] = get_image_url(row.get('ProductImageID', ''), image_export_data)
                     row['Category'] = ''
                     output_data.append(row)
                 
@@ -186,7 +190,8 @@ if product_file and image_file:
                     row['Name_es'] = get_lang_text(choice.get('name'), 'es_ES')
                     row['Name_fr'] = get_lang_text(choice.get('name'), 'fr_FR')
                     row['PLU'] = choice.get('id', '')
-                    row['Price'] = choice.get('price', 0) / 100 if choice.get('price') else ''
+                    # Always set to 0 if no price for MODIFIER
+                    row['Price'] = choice.get('price', 0) / 100 if choice.get('price') else 0
                     
                     choice_ref = None
                     for pc in product_export_data.get('reference', {}).get('product_choice', []):
@@ -197,6 +202,7 @@ if product_file and image_file:
                     row['ProductTags'] = ','.join(choice_ref.get('allergens', [])) if choice_ref else ''
                     row['Producttype'] = 'MODIFIER'
                     row['isCombo'] = 'FALSE'
+                    row['Isinternal'] = ''  # Blank for modifiers
                     output_data.append(row)
                 
                 # STEP 5: MODIFIER GROUP
@@ -226,6 +232,7 @@ if product_file and image_file:
                     row['Producttype'] = 'MODIFIER_GROUP'
                     row['isUpsell'] = 'FALSE'
                     row['isCombo'] = ''
+                    row['Isinternal'] = ''  # Blank for modifier groups
                     output_data.append(row)
                 
                 # STEP 6: UPSELL GROUP
@@ -246,6 +253,7 @@ if product_file and image_file:
                         row['Producttype'] = 'MODIFIER_GROUP'
                         row['isUpsell'] = 'TRUE'
                         row['isCombo'] = ''
+                        row['Isinternal'] = ''  # Blank for upsell groups
                         output_data.append(row)
                 
                 # FINAL PASS: CATEGORY POPULATION
@@ -267,13 +275,16 @@ if product_file and image_file:
                                 break
                         row['Category'] = found_category
                 
-                # GENERATE OUTPUT
+                # GENERATE OUTPUT with new order
                 output_headers = [
-                    'LocationID', 'LocationName', 'PLU', 'Name', 'Name(en)', 'Name(es)', 'Name(fr)', 
-                    'Description', 'Description(en)', 'Description(es)', 'Description(fr)', 
-                    'Price', 'Producttype', 'ProductImageID', 'Imageurl', 'Category', 
-                    'DeliveryTax', 'TakeawayTax', 'EatInTax', 
-                    'Subproducts', 'Min', 'Max', 'ProductTags', 'isCombo', 'isUpsell'
+                    'Name', 'Name(en)', 'Name(es)', 'Name(fr)',
+                    'LocationID', 'LocationName', 'Multiple(bundles)', 'PLU',
+                    'Price', 'DeliveryTax', 'TakeawayTax', 'EatInTax',
+                    'Subproducts', 'Imageurl',
+                    'Description', 'Description(en)', 'Description(es)', 'Description(fr)',
+                    'Max', 'Min', 'Isinternal(combos)',
+                    'Category', 'ProductTags', 'Producttype',
+                    'isCombo', 'isUpsell'
                 ]
                 
                 header_to_key = {
@@ -283,6 +294,8 @@ if product_file and image_file:
                     'Description(en)': 'Description_en',
                     'Description(es)': 'Description_es',
                     'Description(fr)': 'Description_fr',
+                    'Multiple(bundles)': 'Multiple',
+                    'Isinternal(combos)': 'Isinternal',
                 }
                 
                 final_output = '\t'.join(output_headers) + '\n'
@@ -331,7 +344,7 @@ if product_file and image_file:
                 st.exception(e)
 
 else:
-    st.info("👆 Please upload both JSON files to begin conversion.")
+    st.info("👆 Please upload both JSON filez to begin conversion.")
 
 # Footer
 st.markdown("---")
