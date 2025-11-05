@@ -12,14 +12,14 @@ st.set_page_config(
 
 st.title("🍽️ Tabesto Menu Converter")
 st.markdown("""
-Upload your **PRODUCT IMPORT** and **IMAGE EXPORT** JSON files to convert them into a TAB_DLV import template.
+Upload your **PRODUCT EXPORT** and **IMAGE EXPORT** JSON files to convert them into a TAB_DLV import template.
 """)
 
 # File uploaders
 col1, col2 = st.columns(2)
 
 with col1:
-    product_file = st.file_uploader("📄 Upload PRODUCT IMPORT.json", type=['json'])
+    product_file = st.file_uploader("📄 Upload PRODUCT EXPORT.json", type=['json'])
 
 with col2:
     image_file = st.file_uploader("🖼️ Upload IMAGE EXPORT.json", type=['json'])
