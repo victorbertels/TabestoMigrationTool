@@ -10,7 +10,7 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🍽️ Tabesto Menu Converter")
+st.title("🍽️ Tabesto Menu Converter 2.0")
 st.markdown("""
 Upload your **PRODUCT IMPORT** and **IMAGE EXPORT** JSON files to convert them into a TAB_DLV import template.
 """)
