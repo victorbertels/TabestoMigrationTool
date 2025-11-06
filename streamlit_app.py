@@ -41,22 +41,22 @@ current_count = load_counter()
 st.markdown(f"""
 <div style='text-align: center; margin: 20px 0;'>
     <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-        <div style='color: rgba(255,255,255,0.9); font-size: 1em; margin-bottom: 10px; font-weight: 500;'>Built by MALI & V1C</div>
-        <div style='color: white; font-size: 1.2em; margin-bottom: 5px;'>Total Conversions</div>
-        <div style='color: white; font-size: 4em; font-weight: bold; font-family: monospace;'>{current_count:,}</div>
+        <div style='color: white; font-size: 1.8em; margin-bottom: 15px; font-weight: 600;'>Built by MALI & V1C</div>
+        <div style='color: rgba(255,255,255,0.9); font-size: 1em; margin-bottom: 5px;'>Total Conversions</div>
+        <div style='color: white; font-size: 2.5em; font-weight: bold; font-family: monospace;'>{current_count:,}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
-Upload your **PRODUCT IMPORT** and **IMAGE EXPORT** JSON files to convert them into a TAB_DLV import template.
+Upload your **PRODUCT EXPORT** and **IMAGE EXPORT** JSON files to convert them into a TAB_DLV import template.
 """)
 
 # File uploaders
 col1, col2 = st.columns(2)
 
 with col1:
-    product_file = st.file_uploader("📄 Upload PRODUCT IMPORT.json", type=['json'])
+    product_file = st.file_uploader("📄 Upload PRODUCT EXPORT.json", type=['json'])
 
 with col2:
     image_file = st.file_uploader("🖼️ Upload IMAGE EXPORT.json", type=['json'])
