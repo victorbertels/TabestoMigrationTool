@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import re
 import io
+import os
 
 # Page configuration
 st.set_page_config(
@@ -10,7 +11,43 @@ st.set_page_config(
     layout="centered"
 )
 
+# Counter management
+COUNTER_FILE = "usage_counter.json"
+
+def load_counter():
+    """Load the usage counter from file"""
+    if os.path.exists(COUNTER_FILE):
+        try:
+            with open(COUNTER_FILE, 'r') as f:
+                data = json.load(f)
+                return data.get('count', 0)
+        except:
+            return 0
+    return 0
+
+def increment_counter():
+    """Increment and save the usage counter"""
+    count = load_counter()
+    count += 1
+    with open(COUNTER_FILE, 'w') as f:
+        json.dump({'count': count}, f)
+    return count
+
+# Display header with counter
 st.title("🍽️ Tabesto Menu Converter 2.0")
+
+# Display usage counter prominently
+current_count = load_counter()
+st.markdown(f"""
+<div style='text-align: center; margin: 20px 0;'>
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+        <div style='color: rgba(255,255,255,0.9); font-size: 1em; margin-bottom: 10px; font-weight: 500;'>Built by MALI & V1C</div>
+        <div style='color: white; font-size: 1.2em; margin-bottom: 5px;'>Total Conversions</div>
+        <div style='color: white; font-size: 4em; font-weight: bold; font-family: monospace;'>{current_count:,}</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 Upload your **PRODUCT IMPORT** and **IMAGE EXPORT** JSON files to convert them into a TAB_DLV import template.
 """)
@@ -308,8 +345,7 @@ if product_file and image_file:
                 status_text.text("Step 8/8: Applying PLU prefixes...")
                 progress_bar.progress(92)
                 
-                # Build PLU mapping from output data based on row properties
-                plu_map = {}
+                # PASS 1: Apply prefix to each row based on its OWN properties
                 for row in output_data:
                     original_plu = str(row.get('PLU', ''))
                     if not original_plu:
@@ -319,36 +355,97 @@ if product_file and image_file:
                     is_combo = row.get('isCombo', '')
                     is_upsell = row.get('isUpsell', '')
                     
-                    # Determine prefix based on output columns
+                    # Determine prefix based on THIS row's columns
                     if producttype == 'MODIFIER':
-                        prefixed_plu = f"M{original_plu}"
+                        row['PLU'] = f"M{original_plu}"
                     elif producttype == 'PRODUCT' and is_combo == 'FALSE':
-                        prefixed_plu = f"P{original_plu}"
+                        row['PLU'] = f"P{original_plu}"
                     elif producttype == 'PRODUCT' and is_combo == 'TRUE':
-                        prefixed_plu = f"MD{original_plu}"
+                        row['PLU'] = f"MD{original_plu}"
                     elif producttype == 'MODIFIER_GROUP' and is_upsell == 'FALSE':
-                        prefixed_plu = f"MG{original_plu}"
+                        row['PLU'] = f"MG{original_plu}"
                     elif producttype == 'MODIFIER_GROUP' and is_upsell == 'TRUE':
-                        prefixed_plu = f"UG{original_plu}"
+                        row['PLU'] = f"UG{original_plu}"
                     elif producttype == 'BUNDLE':
-                        prefixed_plu = original_plu  # Bundles don't get prefixed
+                        row['PLU'] = original_plu  # Bundles don't get prefixed
                     else:
-                        prefixed_plu = original_plu  # Default: no prefix
-                    
-                    plu_map[original_plu] = prefixed_plu
+                        row['PLU'] = original_plu  # Default: no prefix
                 
-                # Apply prefixes to PLUs and update Subproducts
+                # PASS 2: Build map from original IDs to prefixed PLUs
+                # For subproduct references, we need to know: given an original ID, what are ALL the possible prefixed PLUs?
+                # Build reverse map: original_id -> list of prefixed PLUs
+                id_to_prefixed = {}
                 for row in output_data:
-                    original_plu = str(row.get('PLU', ''))
-                    if original_plu and original_plu in plu_map:
-                        row['PLU'] = plu_map[original_plu]
+                    prefixed_plu = row.get('PLU', '')
+                    # Extract original ID from prefixed PLU
+                    original_id = prefixed_plu
+                    if prefixed_plu.startswith('MD'):
+                        original_id = prefixed_plu[2:]
+                    elif prefixed_plu.startswith('MG') or prefixed_plu.startswith('UG'):
+                        original_id = prefixed_plu[2:]
+                    elif prefixed_plu.startswith('M') or prefixed_plu.startswith('P'):
+                        original_id = prefixed_plu[1:]
                     
-                    # Update Subproducts to use prefixed PLUs
+                    if original_id:
+                        if original_id not in id_to_prefixed:
+                            id_to_prefixed[original_id] = []
+                        if prefixed_plu not in id_to_prefixed[original_id]:
+                            id_to_prefixed[original_id].append(prefixed_plu)
+                
+                # PASS 3: Update Subproducts to use prefixed PLUs
+                # Rules for which prefix to use based on parent type:
+                # - BUNDLE → only P (products)
+                # - PRODUCT (isCombo=FALSE) → only MG (modifier groups)
+                # - PRODUCT (isCombo=TRUE) → only BUNDLE (unprefixed with '-')
+                # - MODIFIER_GROUP (isUpsell=FALSE) → only M (modifiers)
+                # - MODIFIER_GROUP (isUpsell=TRUE) → only P (products)
+                
+                for row in output_data:
                     subproducts = row.get('Subproducts', '')
-                    if subproducts:
-                        original_ids = subproducts.split(',')
-                        prefixed_ids = [plu_map.get(id.strip(), id.strip()) for id in original_ids if id.strip()]
-                        row['Subproducts'] = ','.join(prefixed_ids)
+                    if not subproducts:
+                        continue
+                    
+                    producttype = row.get('Producttype', '')
+                    is_combo = row.get('isCombo', '')
+                    is_upsell = row.get('isUpsell', '')
+                    
+                    original_ids = subproducts.split(',')
+                    prefixed_ids = []
+                    
+                    for orig_id in original_ids:
+                        orig_id = orig_id.strip()
+                        if orig_id in id_to_prefixed:
+                            possible_plus = id_to_prefixed[orig_id]
+                            
+                            # Filter based on parent type
+                            if producttype == 'BUNDLE':
+                                # Bundles can only contain P-prefixed PLUs (products)
+                                matching = [p for p in possible_plus if p.startswith('P') and not p.startswith('MD')]
+                            elif producttype == 'PRODUCT' and is_combo == 'FALSE':
+                                # Regular products can only contain MG-prefixed PLUs (modifier groups)
+                                matching = [p for p in possible_plus if p.startswith('MG')]
+                            elif producttype == 'PRODUCT' and is_combo == 'TRUE':
+                                # Combo products can only contain BUNDLE PLUs (unprefixed with '-')
+                                matching = [p for p in possible_plus if '-' in p and not any(p.startswith(x) for x in ['P', 'M', 'UG'])]
+                            elif producttype == 'MODIFIER_GROUP' and is_upsell == 'FALSE':
+                                # Modifier groups can only contain M-prefixed PLUs (modifiers)
+                                matching = [p for p in possible_plus if p.startswith('M') and not p.startswith('MG') and not p.startswith('MD')]
+                            elif producttype == 'MODIFIER_GROUP' and is_upsell == 'TRUE':
+                                # Upsell groups can only contain P-prefixed PLUs (products)
+                                matching = [p for p in possible_plus if p.startswith('P') and not p.startswith('MD')]
+                            else:
+                                matching = possible_plus
+                            
+                            if matching:
+                                prefixed_ids.extend(matching)
+                            else:
+                                # If no match found, keep original
+                                prefixed_ids.append(orig_id)
+                        else:
+                            # Keep original if not in map
+                            prefixed_ids.append(orig_id)
+                    
+                    row['Subproducts'] = ','.join(prefixed_ids)
                 
                 # GENERATE OUTPUT with new order
                 output_headers = [
@@ -385,8 +482,12 @@ if product_file and image_file:
                 progress_bar.progress(100)
                 status_text.text("✅ Conversion complete!")
                 
+                # Increment usage counter
+                new_count = increment_counter()
+                
                 # Success message
                 st.success(f"✅ Successfully converted {len(output_data)} rows!")
+                st.info(f"🎉 This is conversion #{new_count:,}!")
                 
                 # Display statistics
                 col1, col2, col3 = st.columns(3)
@@ -425,7 +526,7 @@ else:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: gray; font-size: 0.9em;'>
-    <p>🍽️ Tabesto Menu Converter | Built with Streamlit</p>
+    <p>🍽️ Tabesto Menu Converter | Built by MALI & V1C</p>
 </div>
 """, unsafe_allow_html=True)
 
