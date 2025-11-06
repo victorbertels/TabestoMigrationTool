@@ -23,7 +23,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-Upload your **PRODUCT EXPORT** and **IMAGE EXPORT** JSON files to convert them into a TAB_DLV import template.
+Upload your **PRODUCT EXPORT** and **IMAGE EXPORT** JSON files to convert them into a Deliverect product import template.
 """)
 
 # File uploaders
